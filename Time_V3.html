@@ -1,0 +1,325 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flip Clock</title>
+
+    <style>
+        :root {
+            --tile-color: #765039;
+            --text-color: #fffaf4;
+            --tile-width: 108px;
+            --tile-height: 142px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 12px;
+            background: transparent;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .widget {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: max-content;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .clock {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .tile {
+            position: relative;
+            width: var(--tile-width);
+            height: var(--tile-height);
+            overflow: hidden;
+            border-radius: 17px;
+            background: var(--tile-color);
+            color: var(--text-color);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+            perspective: 600px;
+            isolation: isolate;
+        }
+
+        .number {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 76px;
+            line-height: 1;
+            font-weight: 600;
+            letter-spacing: -3px;
+            font-variant-numeric: tabular-nums;
+            z-index: 1;
+        }
+
+        .tile::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.28);
+            transform: translateY(-50%);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .label {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            z-index: 6;
+            white-space: nowrap;
+        }
+
+        .date {
+            color: var(--tile-color);
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        /* Flip animation layers */
+        .flip-half {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            background: var(--tile-color);
+            color: var(--text-color);
+            pointer-events: none;
+        }
+
+        .flip-half span {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: var(--tile-height);
+            display: flex;
+            justify-content: center;
+            font-size: 76px;
+            line-height: var(--tile-height);
+            font-weight: 600;
+            letter-spacing: -3px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .flip-top {
+            top: 0;
+            transform-origin: bottom;
+            border-radius: 17px 17px 0 0;
+            z-index: 4;
+            backface-visibility: hidden;
+        }
+
+        .flip-top span {
+            top: 0;
+            align-items: flex-start;
+        }
+
+        .flip-bottom {
+            top: 50%;
+            border-radius: 0 0 17px 17px;
+            z-index: 2;
+        }
+
+        .flip-bottom span {
+            top: calc(-1 * var(--tile-height) / 2);
+            align-items: flex-start;
+        }
+
+        .flip-top.animate {
+            animation: flipDown 0.6s ease-in forwards;
+        }
+
+        @keyframes flipDown {
+            0% {
+                transform: rotateX(0deg);
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(0.8);
+            }
+
+            100% {
+                transform: rotateX(-180deg);
+                filter: brightness(1);
+            }
+        }
+
+        @media (max-width: 280px) {
+            :root {
+                --tile-width: 88px;
+                --tile-height: 120px;
+            }
+
+            .number,
+            .flip-half span {
+                font-size: 62px;
+            }
+
+            .flip-half span {
+                height: var(--tile-height);
+                line-height: var(--tile-height);
+            }
+
+            .flip-bottom span {
+                top: calc(-1 * var(--tile-height) / 2);
+            }
+
+            .label {
+                font-size: 9px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .flip-top.animate {
+                animation-duration: 0.01ms;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="widget">
+        <div class="clock" aria-label="Current South African time">
+
+            <!-- Hour tile and day -->
+            <div class="tile">
+                <span class="number" id="hours">12</span>
+                <span class="label" id="day">SATURDAY</span>
+            </div>
+
+            <!-- Minute tile and AM/PM -->
+            <div class="tile">
+                <span class="number" id="minutes">00</span>
+                <span class="label" id="period">AM</span>
+            </div>
+
+        </div>
+
+        <div class="date" id="date">Loading date...</div>
+    </main>
+
+    <script>
+        "use strict";
+
+        const timeZone = "Africa/Johannesburg";
+
+        function flipNumber(id, newValue) {
+            const number = document.getElementById(id);
+            const tile = number.parentElement;
+            const oldValue = number.textContent;
+
+            if (oldValue === newValue) {
+                return;
+            }
+
+            // Remove any previous animation layers.
+            tile.querySelectorAll(".flip-half").forEach(layer => {
+                layer.remove();
+            });
+
+            // Update the permanent number underneath.
+            number.textContent = newValue;
+
+            // Create the top half showing the old number.
+            const top = document.createElement("div");
+            top.className = "flip-half flip-top";
+
+            const topText = document.createElement("span");
+            topText.textContent = oldValue;
+            top.appendChild(topText);
+
+            // Create the bottom half showing the new number.
+            const bottom = document.createElement("div");
+            bottom.className = "flip-half flip-bottom";
+
+            const bottomText = document.createElement("span");
+            bottomText.textContent = newValue;
+            bottom.appendChild(bottomText);
+
+            tile.appendChild(bottom);
+            tile.appendChild(top);
+
+            // Start the top half flipping down.
+            requestAnimationFrame(() => {
+                top.classList.add("animate");
+            });
+
+            // Clean up after the animation finishes.
+            top.addEventListener("animationend", () => {
+                top.remove();
+                bottom.remove();
+            }, { once: true });
+        }
+
+        function updateClock() {
+            const now = new Date();
+
+            const timeParts = new Intl.DateTimeFormat("en-US", {
+                timeZone: timeZone,
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true
+            }).formatToParts(now);
+
+            const getPart = type =>
+                timeParts.find(part => part.type === type)?.value;
+
+            const hour = getPart("hour") || "12";
+            const minute = getPart("minute") || "00";
+            const period = getPart("dayPeriod") || "AM";
+
+            // Animate only when the hour or minute changes.
+            flipNumber("hours", hour);
+            flipNumber("minutes", minute);
+
+            document.getElementById("period").textContent = period;
+
+            document.getElementById("day").textContent =
+                new Intl.DateTimeFormat("en-US", {
+                    timeZone: timeZone,
+                    weekday: "long"
+                }).format(now).toUpperCase();
+
+            document.getElementById("date").textContent =
+                new Intl.DateTimeFormat("en-ZA", {
+                    timeZone: timeZone,
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric"
+                }).format(now);
+        }
+
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>
+```
